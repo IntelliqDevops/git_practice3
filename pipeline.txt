@@ -1,0 +1,87 @@
+# Docker
+# Build and push an image to Azure Container Registry
+# https://docs.microsoft.com/azure/devops/pipelines/languages/docker
+
+trigger:
+- main
+
+resources:
+ pipelines:
+   - pipeline: Sample
+     source: resultapp
+     trigger: true
+
+variables:
+  # Container registry service connection established during pipeline creation
+  dockerRegistryServiceConnection: '9a93aeb2-a644-414d-8f3c-e630289b9c65'
+  imageRepository: 'votingapp'
+  containerRegistry: 'intelliq.azurecr.io'
+  dockerfilePath: '$(Build.SourcesDirectory)/vote/Dockerfile'
+  tag: '$(Build.BuildId)'
+
+  # Agent VM image name
+pool:
+ name: 'agent1'
+
+stages:
+- stage: Build
+  displayName: Build
+  jobs:
+  - job: Build
+    displayName: Build
+    pool:
+      name: 'agent1'
+    steps:
+    - task: Docker@2
+      displayName: Build
+      inputs:
+        containerRegistry: '$(dockerRegistryServiceConnection)'
+        repository: '$(imageRepository)'
+        command: 'build'
+        Dockerfile: '**/Dockerfile'
+        tags: '$(tag)'
+- stage: Push
+  displayName: Push
+  jobs:
+  - job: Push
+    displayName: Push
+    pool:
+      name: 'agent1'
+    steps:
+    - task: Docker@2
+      displayName: Push
+      inputs:
+        containerRegistry: '$(dockerRegistryServiceConnection)'
+        repository: '$(imageRepository)'
+        command: 'push'
+        tags: '$(tag)'
+- stage: Create
+  displayName: Create
+  jobs:
+  - job: Create
+    displayName: Create
+    pool:
+      name: 'agent1'
+    steps:
+     - task: Bash@3
+       inputs:
+        targetType: 'inline'
+        script: |
+          ssh azureuser@172.210.61.101 docker run -d -P intelliq.azurecr.io/votingapp:148
+- stage: Test
+  displayName: Test
+  jobs:
+  - job: Test
+    displayName: Test
+    pool:
+      name: 'agent1'
+    steps:
+     - task: Bash@3
+       inputs:
+         targetType: 'inline'
+         script: 'git clone https://github.com/intelliqittrainings/FunctionalTesting.git'
+     - task: Bash@3
+       inputs:
+         targetType: 'inline'
+         script: 'java -jar /home/azureuser/myagent/_work/1/s/FunctionalTesting/testing.jar'
+
